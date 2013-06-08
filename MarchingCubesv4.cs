@@ -1,22 +1,20 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
-
+using System;
 
 public class MarchingCubesv4 : MonoBehaviour {
 
 	// Use this for initialization
 	void Start () {
-		MarchingCubesRecursive march = new MarchingCubesRecursive(455);
-		float scale = 1.0f/4.0f;
-		Mesh mesh = march.CreateMesh(0.0f,18.0f,scale);
+		MarchingCubesRecursive march = new MarchingCubesRecursive(100);
+		float scale = 1.0f/1.0f;
+		Mesh mesh = march.CreateMesh(-20.0f,20.0f,scale);
 		
 		mesh.uv = new Vector2[mesh.vertices.Length];
 		mesh.RecalculateNormals();
 		
 		gameObject.GetComponent<MeshFilter>().mesh = mesh;
-		
-		
 	}
 	
 	// Update is called once per frame
@@ -33,6 +31,7 @@ public class MarchingCubesRecursive{
 	PerlinNoise noise;
 	float max;
 	float min;
+	float scale;
 	
 	public MarchingCubesRecursive(int seed){
 		noise = new PerlinNoise(seed);
@@ -41,6 +40,7 @@ public class MarchingCubesRecursive{
 	{
 		this.max = max;
 		this.min = min;
+		this.scale = scale;
 		float x = min, y = min, z = min;
 		bool pointFound = false;
 		Vector3 startPoint = new Vector3(x,y,z);
@@ -52,7 +52,7 @@ public class MarchingCubesRecursive{
 			while(y < max && !pointFound){
 				while(z < max && !pointFound){
 					//Perform algorithm
-					pointFound = findPoint(new Vector3(x,y,z), scale);
+					pointFound = findPoint(new Vector3(x,y,z));
 					startPoint = new Vector3(x,y,z);
 					z+=scale;
 				}
@@ -63,7 +63,8 @@ public class MarchingCubesRecursive{
 			y=-1;
 		}
 		//Let the marching begin
-		marchingCubesV2(startPoint, scale);
+		marchingCubesV2(startPoint);
+		
 		
 		Mesh mesh = new Mesh();
 
@@ -72,8 +73,8 @@ public class MarchingCubesRecursive{
 		
 		return mesh;
 	}
-	private void marchingCubesV2(Vector3 pos, float scale){
-		
+	 
+	private void marchingCubesV2(Vector3 pos){
 		int vert, idx;
 		float[] cubeVerts = new float[8];
 		int flagIndex = 0;
@@ -105,10 +106,7 @@ public class MarchingCubesRecursive{
 		//This cube is either entirely solid (edgeFlags == 255)
 		//or entirely air so we don't do shit (edgeFlags == 0)
 		//or it is outside the chunk we want generated (pos.x >= max || pos.y >= max || pos.z >= max)
-		//or this cube has been checked already !used.Add(pos)
 		//So we don't do shit here
-		//Note: Checking the !used.Add(pos) further up, before the noise generation would probably save some time
-		//Debug.Log("pos.x: " + pos.x + " pos.y: " + pos.y + "pos.z; " + pos.z + "maxx,maxy,maxz: " + maxx + " " + maxy + " " + maxz);
 		if(edgeFlags == 0 || edgeFlags == 255 || pos.x > max || pos.y > max || pos.z > max || pos.x < min || pos.y < min || pos.z < min){
 			return;
 		}/*else{
@@ -141,20 +139,21 @@ public class MarchingCubesRecursive{
                 vert = triangleConnectionTable[flagIndex,3*i+j];
 				indexList.Add(idx+windingOrder[j]);
 				vertList.Add(edgeVertex[vert]);
-	    }
-	}
+	    	}
+		}
+		
 		//March to the neighbors. Will be the six cubes that coincide with faces of this cube
 		//Should actually attempt to put every new vector in the used hashset here before making the recusrive call at all...
 		for(int i = 0; i<6;i++){
 			if(used.Add(pos+ neighbors[i] * scale)){
-    			marchingCubesV2(pos + neighbors[i] * scale, scale);
+    			marchingCubesV2(pos + neighbors[i] * scale);
 			}
 		}
 			
     
 	}
 	
-	bool findPoint(Vector3 pos, float scale){
+	bool findPoint(Vector3 pos){
 		
 		float[] cubeVerts = new float[8];
 		int flagIndex = 0;
@@ -164,7 +163,6 @@ public class MarchingCubesRecursive{
 			cubeVerts[i] = noise.FractalNoise3D(pos.x + vertexOffset[i,0]*scale,
 									pos.y + vertexOffset[i,1]*scale,
 									pos.z + vertexOffset[i,2]*scale, 3, 40, 1);
-			Debug.Log(cubeVerts[i]);
 		}
 		
 		for(int i=0;i<8;i++){
@@ -191,7 +189,7 @@ public class MarchingCubesRecursive{
 	    return (delta == 0.0f) ? 0.5f : (target - v1)/delta;
 	}
 	
-	float target = 0f;
+	float target = 0.0f;
 	int[] windingOrder = {0,1,2};
 	
 	Vector3[] neighbors = 
@@ -515,4 +513,251 @@ public class MarchingCubesRecursive{
 	    {0, 3, 8, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 	    {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}
 	};
+}
+
+public class PerlinNoise
+{
+	const int B = 256;
+	int[] m_perm = new int[B+B];
+	Texture2D m_permTex;
+
+	public PerlinNoise(int seed)
+	{
+		UnityEngine.Random.seed = seed;
+
+		int i, j, k;
+		for (i = 0 ; i < B ; i++) 
+		{
+			m_perm[i] = i;
+		}
+
+		while (--i != 0) 
+		{
+			k = m_perm[i];
+			j = UnityEngine.Random.Range(0, B);
+			m_perm[i] = m_perm[j];
+			m_perm[j] = k;
+		}
+	
+		for (i = 0 ; i < B; i++) 
+		{
+			m_perm[B + i] = m_perm[i];
+		}
+		
+	}
+	
+	float FADE(float t) { return t * t * t * ( t * ( t * 6.0f - 15.0f ) + 10.0f ); }
+	
+	float LERP(float t, float a, float b) { return (a) + (t)*((b)-(a)); }
+	
+	float GRAD1(int hash, float x ) 
+	{
+		int h = hash % 16;
+		float grad = 1.0f + (h % 8);
+		if((h%8) < 4) grad = -grad;
+		return ( grad * x );
+	}
+	
+	float GRAD2(int hash, float x, float y)
+	{
+		int h = hash % 16;
+    	float u = h<4 ? x : y;
+    	float v = h<4 ? y : x;
+		int hn = h%2;
+		int hm = (h/2)%2;
+    	return ((hn != 0) ? -u : u) + ((hm != 0) ? -2.0f*v : 2.0f*v);
+	}
+	
+	
+	float GRAD3(int hash, float x, float y , float z)
+	{
+    	int h = hash % 16;
+    	float u = (h<8) ? x : y;
+    	float v = (h<4) ? y : (h==12||h==14) ? x : z;
+		int hn = h%2;
+		int hm = (h/2)%2;
+    	return ((hn != 0) ? -u : u) + ((hm != 0) ? -v : v);
+	}
+	
+	float Noise1D( float x )
+	{
+		//returns a noise value between -0.5 and 0.5
+	    int ix0, ix1;
+	    float fx0, fx1;
+	    float s, n0, n1;
+	
+	    ix0 = (int)Mathf.Floor(x); 	// Integer part of x
+	    fx0 = x - ix0;       	// Fractional part of x
+	    fx1 = fx0 - 1.0f;
+	    ix1 = ( ix0+1 ) & 0xff;
+	    ix0 = ix0 & 0xff;    	// Wrap to 0..255
+		
+	    s = FADE(fx0);
+	
+	    n0 = GRAD1(m_perm[ix0], fx0);
+	    n1 = GRAD1(m_perm[ix1], fx1);
+	    return 0.188f * LERP( s, n0, n1);
+	}
+	
+	float Noise2D( float x, float y )
+	{
+		//returns a noise value between -0.75 and 0.75
+	    int ix0, iy0, ix1, iy1;
+	    float fx0, fy0, fx1, fy1, s, t, nx0, nx1, n0, n1;
+	
+	    ix0 = (int)Mathf.Floor(x); 	// Integer part of x
+	    iy0 = (int)Mathf.Floor(y); 	// Integer part of y
+	    fx0 = x - ix0;        	// Fractional part of x
+	    fy0 = y - iy0;        	// Fractional part of y
+	    fx1 = fx0 - 1.0f;
+	    fy1 = fy0 - 1.0f;
+	    ix1 = (ix0 + 1) & 0xff; // Wrap to 0..255
+	    iy1 = (iy0 + 1) & 0xff;
+	    ix0 = ix0 & 0xff;
+	    iy0 = iy0 & 0xff;
+	    
+	    t = FADE( fy0 );
+	    s = FADE( fx0 );
+	
+		nx0 = GRAD2(m_perm[ix0 + m_perm[iy0]], fx0, fy0);
+	    nx1 = GRAD2(m_perm[ix0 + m_perm[iy1]], fx0, fy1);
+		
+	    n0 = LERP( t, nx0, nx1 );
+	
+	    nx0 = GRAD2(m_perm[ix1 + m_perm[iy0]], fx1, fy0);
+	    nx1 = GRAD2(m_perm[ix1 + m_perm[iy1]], fx1, fy1);
+		
+	    n1 = LERP(t, nx0, nx1);
+	
+	    return 0.507f * LERP( s, n0, n1 );
+	}
+	
+	float Noise3D( float x, float y, float z )
+	{
+		//returns a noise value between -1.5 and 1.5
+	    int ix0, iy0, ix1, iy1, iz0, iz1;
+	    float fx0, fy0, fz0, fx1, fy1, fz1;
+	    float s, t, r;
+	    float nxy0, nxy1, nx0, nx1, n0, n1;
+	
+	    ix0 = (int)Mathf.Floor( x ); // Integer part of x
+	    iy0 = (int)Mathf.Floor( y ); // Integer part of y
+	    iz0 = (int)Mathf.Floor( z ); // Integer part of z
+	    fx0 = x - ix0;        // Fractional part of x
+	    fy0 = y - iy0;        // Fractional part of y
+	    fz0 = z - iz0;        // Fractional part of z
+	    fx1 = fx0 - 1.0f;
+	    fy1 = fy0 - 1.0f;
+	    fz1 = fz0 - 1.0f;
+	    ix1 = ( ix0 + 1 ) & 0xff; // Wrap to 0..255
+	    iy1 = ( iy0 + 1 ) & 0xff;
+	    iz1 = ( iz0 + 1 ) & 0xff;
+	    ix0 = ix0 & 0xff;
+	    iy0 = iy0 & 0xff;
+	    iz0 = iz0 & 0xff;
+	    
+	    r = FADE( fz0 );
+	    t = FADE( fy0 );
+	    s = FADE( fx0 );
+	
+		nxy0 = GRAD3(m_perm[ix0 + m_perm[iy0 + m_perm[iz0]]], fx0, fy0, fz0);
+	    nxy1 = GRAD3(m_perm[ix0 + m_perm[iy0 + m_perm[iz1]]], fx0, fy0, fz1);
+	    nx0 = LERP( r, nxy0, nxy1 );
+	
+	    nxy0 = GRAD3(m_perm[ix0 + m_perm[iy1 + m_perm[iz0]]], fx0, fy1, fz0);
+	    nxy1 = GRAD3(m_perm[ix0 + m_perm[iy1 + m_perm[iz1]]], fx0, fy1, fz1);
+	    nx1 = LERP( r, nxy0, nxy1 );
+	
+	    n0 = LERP( t, nx0, nx1 );
+	
+	    nxy0 = GRAD3(m_perm[ix1 + m_perm[iy0 + m_perm[iz0]]], fx1, fy0, fz0);
+	    nxy1 = GRAD3(m_perm[ix1 + m_perm[iy0 + m_perm[iz1]]], fx1, fy0, fz1);
+	    nx0 = LERP( r, nxy0, nxy1 );
+	
+	    nxy0 = GRAD3(m_perm[ix1 + m_perm[iy1 + m_perm[iz0]]], fx1, fy1, fz0);
+	   	nxy1 = GRAD3(m_perm[ix1 + m_perm[iy1 + m_perm[iz1]]], fx1, fy1, fz1);
+	    nx1 = LERP( r, nxy0, nxy1 );
+	
+	    n1 = LERP( t, nx0, nx1 );
+	    
+	    return 0.936f * LERP( s, n0, n1 );
+	}
+	
+	public float FractalNoise1D(float x, int octNum, float frq, float amp)
+	{
+		float gain = 1.0f;
+		float sum = 0.0f;
+	
+		for(int i = 0; i < octNum; i++)
+		{
+			sum +=  Noise1D(x*gain/frq) * amp/gain;
+			gain *= 2.0f;
+		}
+		return sum;
+	}
+	
+	public float FractalNoise2D(float x, float y, int octNum, float frq, float amp)
+	{
+		float gain = 1.0f;
+		float sum = 0.0f;
+	
+		for(int i = 0; i < octNum; i++)
+		{
+			sum += Noise2D(x*gain/frq, y*gain/frq) * amp/gain;
+			gain *= 2.0f;
+		}
+		return sum;
+	}
+	
+	public float FractalNoise3D(float x, float y, float z, int octNum, float frq, float amp)
+	{
+		float gain = 1.0f;
+		float sum = 0.0f;
+	
+		for(int i = 0; i < octNum; i++)
+		{
+			sum +=  Noise3D(x*gain/frq, y*gain/frq, z*gain/frq) * amp/gain;
+			gain *= 2.0f;
+		}
+		return sum;
+	}
+	
+	public void LoadPermTableIntoTexture()
+	{
+		m_permTex = new Texture2D(256, 1, TextureFormat.Alpha8, false);
+		m_permTex.filterMode = FilterMode.Point;
+		m_permTex.wrapMode = TextureWrapMode.Clamp;
+		
+		for(int i = 0; i < 256; i++)
+		{
+			float v = (float)m_perm[i] / 255.0f;
+				
+			m_permTex.SetPixel(i, 0, new Color(0,0,0,v));
+		}
+		
+		m_permTex.Apply();
+	}
+	
+	public void RenderIntoTexture(Shader shader, RenderTexture renderTex, int octNum, float frq, float amp)
+	{
+		if(!m_permTex) LoadPermTableIntoTexture();
+		
+		Material mat = new Material(shader);
+		
+		mat.SetFloat("_Frq", frq);
+		mat.SetFloat("_Amp", amp);
+		mat.SetVector("_TexSize", new Vector4(renderTex.width-1.0f, renderTex.height-1.0f, 0, 0));
+		mat.SetTexture("_Perm", m_permTex);
+		
+		float gain = 1.0f;
+		for(int i = 0; i < octNum; i++)
+		{
+			mat.SetFloat("_Gain", gain);
+		   
+		    Graphics.Blit(null, renderTex, mat);
+			
+			gain *= 2.0f;
+		}
+	}
+
 }
