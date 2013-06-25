@@ -4,53 +4,117 @@ using System.Collections.Generic;
 using System;
 
 public class MarchingCubesv4 : MonoBehaviour {
-
+	
+	public Material mat;
 	// Use this for initialization
 	void Start () {
-		MarchingCubesRecursive march = new MarchingCubesRecursive(100);
+		mat = null;
+		MarchingCubesRecursive march = new MarchingCubesRecursive(123);
 		float scale = 1.0f/1.0f;
-		Mesh mesh = march.CreateMesh(-20.0f,20.0f,scale);
+		float max = 15f;
+		float min = -15f;
+		Mesh mesh = null;
 		
-		mesh.uv = new Vector2[mesh.vertices.Length];
-		mesh.RecalculateNormals();
 		
-		gameObject.GetComponent<MeshFilter>().mesh = mesh;
+		/*mesh = march.CreateMesh(-max,-max,-max,max,max,max,scale);
+		
+			mesh.uv = new Vector2[mesh.vertices.Length];
+			mesh.RecalculateNormals();
+			gameObject.GetComponent<MeshFilter>().mesh = mesh;*/
+		//Loop will creat a a middle chunk and the 6 adjacent
+		
+		for(int i = 0; i <26;i++)
+		{	
+			//mesh = march.CreateMesh(-(max + max*neighbors[i].x),-(max + max*neighbors[i].y),-(max + max*neighbors[i].z),(max + max*neighbors[i].x),(max + max*neighbors[i].y),(max + max*neighbors[i].z),scale);
+		
+			//Warning i think min must be negative and max must be positive intially. They will hit any value in looping though
+			mesh = march.CreateMesh(min + (2*max *neighbors[i].x),min + (2*max *neighbors[i].y),min + (2*max *neighbors[i].z),max + (2*max *neighbors[i].x),max + (2*max *neighbors[i].y),max + (2*max *neighbors[i].z),scale);
+			mesh.uv = new Vector2[mesh.vertices.Length];
+			mesh.RecalculateNormals();
+		
+			GameObject mmesh = new GameObject("Mesh"+i);
+			mmesh.AddComponent<MeshFilter>();
+			mmesh.GetComponent<MeshFilter>().mesh = mesh;
+			mmesh.AddComponent<MeshRenderer>();
+			mmesh.GetComponent<MeshRenderer>().material = Resources.Load("Grass") as Material;
+			mmesh.AddComponent<MeshCollider>();
+			//gameObject.GetComponent<MeshFilter>().mesh = mesh;
+		}
 	}
 	
 	// Update is called once per frame
 	void Update () {
 	
 	}
+	
+		Vector3[] neighbors = 
+	{
+		new Vector3(0,0,0),
+        new Vector3(1,0,0),
+		new Vector3(0,1,0),
+		new Vector3(0,0,1),
+		new Vector3(-1,0,0),
+		new Vector3(0,-1,0),
+		new Vector3(0,0,-1),
+		new Vector3(1,1,0),
+		new Vector3(1,1,1),
+		new Vector3(1,0,1),
+		new Vector3(-1,0,1),
+		new Vector3(1,0,-1),
+		new Vector3(-1,0,-1),
+		new Vector3(0,0,0),
+        new Vector3(2,0,0),
+		new Vector3(0,2,0),
+		new Vector3(0,0,2),
+		new Vector3(-2,0,0),
+		new Vector3(0,-2,0),
+		new Vector3(0,0,-2),
+		new Vector3(2,1,0),
+		new Vector3(2,1,1),
+		new Vector3(2,0,1),
+		new Vector3(-2,0,1),
+		new Vector3(2,0,-1),
+		new Vector3(-2,0,-1)
+		
+    };
 }
 
 public class MarchingCubesRecursive{
 	
 	static HashSet<Vector3> used = new HashSet<Vector3>();
-	List<Vector3> vertList = new List<Vector3>();
-	List<int> indexList = new List<int>();
+	List<Vector3> vertList;
+	List<int> indexList;
 	PerlinNoise noise;
-	float max;
-	float min;
+	float xmax, ymax, zmax;
+	float xmin, ymin, zmin;
 	float scale;
+	Vector3[] edgeVertex;
+	float[] cubeVerts;
 	
 	public MarchingCubesRecursive(int seed){
 		noise = new PerlinNoise(seed);
 	}
-	public Mesh CreateMesh(float min, float max, float scale)
+	public Mesh CreateMesh(float xmin, float ymin, float zmin, float xmax, float ymax, float zmax, float scale)
 	{
-		this.max = max;
-		this.min = min;
+		vertList = new List<Vector3>();
+		indexList = new List<int>();
+		this.xmax = xmax;
+		this.ymax = ymax;
+		this.zmax = zmax;
+		this.xmin = xmin;
+		this.ymin = ymin;
+		this.zmin = zmin;
 		this.scale = scale;
-		float x = min, y = min, z = min;
+		float x = xmin, y = ymin, z = zmin;
 		bool pointFound = false;
 		Vector3 startPoint = new Vector3(x,y,z);
 		
 		//Because we are implementing this recursively we need a point that will return a block to start with otherwise the function will terminate in the first call
 		//This is similar to implementing marching cubes iteratively but we stop the second we get a block that isnt just air or solid and return the corresponding vector
 		//Possibly make this recursive at some point.
-		while(x < max && !pointFound){
-			while(y < max && !pointFound){
-				while(z < max && !pointFound){
+		while(x < xmax && !pointFound){
+			while(y < ymax && !pointFound){
+				while(z < zmax && !pointFound){
 					//Perform algorithm
 					pointFound = findPoint(new Vector3(x,y,z));
 					startPoint = new Vector3(x,y,z);
@@ -76,10 +140,10 @@ public class MarchingCubesRecursive{
 	 
 	private void marchingCubesV2(Vector3 pos){
 		int vert, idx;
-		float[] cubeVerts = new float[8];
+		cubeVerts = new float[8];
 		int flagIndex = 0;
 		float offset = 0.0f;
-		Vector3[] edgeVertex = new Vector3[12];
+		edgeVertex = new Vector3[12];
 		
 		//This is getting the noise value at each corner
 		//Possible bottleneck is the noise generation, just got that code off the internet and went with it.
@@ -107,7 +171,7 @@ public class MarchingCubesRecursive{
 		//or entirely air so we don't do shit (edgeFlags == 0)
 		//or it is outside the chunk we want generated (pos.x >= max || pos.y >= max || pos.z >= max)
 		//So we don't do shit here
-		if(edgeFlags == 0 || edgeFlags == 255 || pos.x > max || pos.y > max || pos.z > max || pos.x < min || pos.y < min || pos.z < min){
+		if(edgeFlags == 0 || edgeFlags == 255 || pos.x > xmax || pos.y > ymax || pos.z > zmax || pos.x < xmin || pos.y < ymin || pos.z < zmin){
 			return;
 		}/*else{
 			GameObject cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
